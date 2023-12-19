@@ -1,163 +1,199 @@
-import System.Console.ANSI
-import Data.List (sort)
+import Data.List (intercalate)
 
+-- Bubble Sort
 
--- Sorting algorithms
+bubbleSort :: (Ord a, Show a) => [a] -> Bool -> IO ()
+bubbleSort arr asc = do
+    putStrLn $ "Original Array: " ++ show arr
+    putStrLn $ "Sorting Order: " ++ if asc then "Ascending" else "Descending"
+    putStrLn "Sorting Process:"
+    printIterationsBubble arr asc 0
 
-selectionSort :: Ord a => [a] -> [a]
-selectionSort [] = []
-selectionSort (x:xs) = let
-  smallest = minimum (x:xs)
-  in smallest : selectionSort (filter (/= smallest) (x:xs))
-
-bubbleSort :: Ord a => [a] -> [a]
-bubbleSort = sort
-
-insertionSort :: Ord a => [a] -> [a]
-insertionSort [] = []
-insertionSort (x:xs) = insert x (insertionSort xs)
+printIterationsBubble :: (Ord a, Show a) => [a] -> Bool -> Int -> IO ()
+printIterationsBubble arr asc iter = do
+    let (newArr, swapped) = iteratePass arr asc
+    putStrLn $ "Iteration " ++ show (iter + 1) ++ ": " ++ intercalate ", " (map show newArr)
+    if swapped
+        then printIterationsBubble newArr asc (iter + 1)
+        else putStrLn $ "Sorted Array: " ++ intercalate ", " (map show newArr)
   where
-    insert :: Ord a => a -> [a] -> [a]
-    insert y [] = [y]
-    insert y (z:zs)
-      | y <= z    = y:z:zs
-      | otherwise = z : insert y zs
+    iteratePass arr' asc' = bubblePass arr' asc' False
+    bubblePass :: (Ord a) => [a] -> Bool -> Bool -> ([a], Bool)
+    bubblePass [] _ swapped = ([], swapped)
+    bubblePass [x] _ swapped = ([x], swapped)
+    bubblePass (x:y:xs) asc''' swapped
+        | shouldSwap x y asc''' = let (sortedTail, isSwapped) = bubblePass (x:xs) asc''' True
+                                  in (y : sortedTail, isSwapped)
+        | otherwise = let (sortedTail, isSwapped) = bubblePass (y:xs) asc''' swapped
+                      in (x : sortedTail, isSwapped)
+    shouldSwap a b True = a > b
+    shouldSwap a b False = a < b
 
-mergeSort :: Ord a => [a] -> [a]
-mergeSort [] = []
-mergeSort [x] = [x]
-mergeSort xs = merge (mergeSort firstHalf) (mergeSort secondHalf)
+-- Insertion Sort
+
+insertionSort :: (Ord a, Show a) => [a] -> Bool -> IO () 
+insertionSort arr asc = do
+    putStrLn $ "Original Array: " ++ show arr
+    putStrLn $ "Sorting Order: " ++ if asc then "Ascending" else "Descending"
+    sorted <- insertionPass arr asc 1
+    putStrLn $ "Sorted Array: " ++ intercalate ", " (map show sorted)
+
+insertionPass :: (Ord a, Show a) => [a] -> Bool -> Int -> IO [a]
+insertionPass arr _ i | i >= length arr = return arr
+insertionPass arr asc i = do
+    let (left, right) = splitAt i arr
+        current = head right
+        sortedLeft = insertion current left asc
+        sorted = sortedLeft ++ tail right
+    putStrLn $ "Iteration " ++ show i ++ ": " ++ intercalate ", " (map show sorted)
+    insertionPass sorted asc (i + 1)
+
+insertion :: Ord a => a -> [a] -> Bool -> [a]
+insertion x [] _ = [x]
+insertion x (y:ys) asc
+    | asc && x <= y = x : y : ys
+    | not asc && x >= y = x : y : ys
+    | otherwise = y : insertion x ys asc
+
+-- Selection Sort
+
+selectionSort :: (Ord a, Show a) => [a] -> Bool -> IO ()
+selectionSort arr asc = do
+    putStrLn $ "Original Array: " ++ show arr
+    putStrLn $ "Sorting Order: " ++ if asc then "Ascending" else "Descending" 
+    putStrLn "Sorting Process:"
+    printIterationsSelection arr asc 0
+
+printIterationsSelection :: (Ord a, Show a) => [a] -> Bool -> Int -> IO ()
+printIterationsSelection arr asc iter
+    | iter >= length arr = putStrLn $ "Sorted Array: " ++ intercalate ", " (map show arr)
+    | otherwise = do
+        let (newArr, minIndex) = iteratePass arr iter asc
+        putStrLn $ "Iteration " ++ show (iter + 1) ++ ": " ++ intercalate ", " (map show newArr)
+        if minIndex /= iter
+            then do
+                let swappedArr = swapElements newArr iter minIndex
+                printIterationsSelection swappedArr asc (iter + 1)
+            else printIterationsSelection newArr asc (iter + 1)
+
+iteratePass :: Ord a => [a] -> Int -> Bool -> ([a], Int)
+iteratePass arr start asc = foldr (findMin asc) (arr, start) [start..length arr - 1]
   where
-    (firstHalf, secondHalf) = splitAt (length xs `div` 2) xs
-    merge :: Ord a => [a] -> [a] -> [a]
-    merge [] ys = ys
-    merge xs [] = xs
-    merge (x:xs) (y:ys)
-      | x <= y    = x : merge xs (y:ys)
-      | otherwise = y : merge (x:xs) ys
+    findMin asc i (arr', minIndex)
+        | asc && current < minValue = (arr', i)
+        | not asc && current > minValue = (arr', i)
+        | otherwise = (arr', minIndex)
+      where
+        current = arr' !! i
+        minValue = arr' !! minIndex
 
-quickSort :: Ord a => [a] -> [a]
-quickSort [] = []
-quickSort (x:xs) = quickSort (filter (< x) xs) ++ [x] ++ quickSort (filter (>= x) xs)
+swapElements :: [a] -> Int -> Int -> [a]
+swapElements arr i j
+    | i /= j = take i merged ++ [arr !! j] ++ middle ++ [arr !! i] ++ drop (j + 1) merged
+    | otherwise = arr
+  where
+    merged = mergeLists arr
+    middle = take (j - i - 1) $ drop (i + 1) merged
 
--- User interface functions
+mergeLists :: [a] -> [a]
+mergeLists = concatMap (\x -> [x])
 
-setColor :: Color -> IO ()
-setColor color = setSGR [SetColor Foreground Vivid color]
+-- Quick Sort
 
-resetColor :: IO ()
-resetColor = setSGR [Reset]
+qsortWithSteps :: (Ord a, Show a) => [a] -> Bool -> IO [a]
+qsortWithSteps [] _ = return []
+qsortWithSteps [x] _ = return [x]
+qsortWithSteps (x:xs) asc = do
+    let smaller = [a | a <- xs, a <= x]
+        larger = [a | a <- xs, a > x]
+        sorted =
+            if asc
+                then smaller ++ [x] ++ larger
+                else larger ++ [x] ++ smaller
+    putStrLn $ "Step: Smaller: " ++ show smaller ++ ", Pivot: " ++ show x ++ ", Larger: " ++ show larger
+    sortedSmaller <- qsortWithSteps smaller asc
+    sortedLarger <- qsortWithSteps larger asc
+    return $ sortedSmaller ++ [x] ++ sortedLarger
 
-displayMenu :: IO ()
-displayMenu = do
-  setColor Cyan
-  putStrLn "\nSorting Algorithm Simulation"
-  resetColor
-  putStrLn "1. Selection Sort"
-  putStrLn "2. Bubble Sort"
-  putStrLn "3. Insertion Sort"
-  putStrLn "4. Merge Sort"
-  putStrLn "5. Quick Sort"
+quickSort :: (Ord a, Show a) => [a] -> Bool -> IO ()
+quickSort arr asc = do
+    putStrLn $ "Original Array: " ++ show arr
+    putStrLn $ "Sorting Order: " ++ if asc then "Ascending" else "Descending"
+    putStrLn "Sorting Process:"
+    sortedArr <- qsortWithSteps arr asc
+    putStrLn $ "Sorted Array: " ++ intercalate ", " (map show sortedArr)
 
-getAlgorithmChoice :: IO Int
-getAlgorithmChoice = do
-  setColor Yellow
-  putStr "Choose a sorting algorithm (1-5): "
-  resetColor
-  choice <- getLine
-  return (read choice :: Int)
 
-getOrderChoice :: IO Int
-getOrderChoice = do
-  setColor Yellow
-  putStrLn "Choose sorting order:"
-  resetColor
-  putStrLn "1. Ascending"
-  putStrLn "2. Descending"
-  putStr "Enter your choice (1 or 2): "
-  choice <- getLine
-  return (read choice :: Int)
+-- Merge function
+merge :: Ord a => Bool -> [a] -> [a] -> [a]
+merge _ [] ys = ys
+merge _ xs [] = xs
+merge asc (x:xs) (y:ys)
+  | asc && x <= y = x : merge asc xs (y:ys)
+  | not asc && x >= y = x : merge asc xs (y:ys)
+  | otherwise = y : merge asc (x:xs) ys
 
-getDefaultArray :: [Int]
-getDefaultArray = [5, 2, 8, 1, 3]
+-- Function to split the list into two halves
+split :: [a] -> ([a], [a])
+split xs = splitAt (length xs `div` 2) xs
 
-getCustomArray :: IO [Int]
-getCustomArray = do
-  setColor Yellow
-  putStrLn "Enter custom array elements separated by spaces (maximum 5 elements):"
-  resetColor
-  input <- getLine
-  let customArray = take 5 $ map read (words input) :: [Int]
-  if length customArray /= length (words input)
-    then do
-      setColor Red
-      putStrLn "Error: Too many elements provided. Only the first 5 elements will be considered."
-      resetColor
-    else return ()
-  return customArray
+-- Merge Sort function with logging iterations
+mergeSort :: (Ord a, Show a) => [a] -> Bool -> IO [a]
+mergeSort xs asc = mergeSort' xs 1
+  where
+    mergeSort' :: (Ord a, Show a) => [a] -> Int -> IO [a]
+    mergeSort' ys iter
+      | length ys <= 1 = do
+          putStrLn $ "Iteration " ++ show iter ++ ": " ++ show ys
+          return ys
+      | otherwise = do
+          let (left, right) = split ys
+          putStrLn $ "Iteration " ++ show iter ++ " - Left: " ++ show left ++ " | Right: " ++ show right
+          sortedLeft <- mergeSort' left (iter + 1)
+          sortedRight <- mergeSort' right (iter + 1)
+          let merged = merge asc sortedLeft sortedRight  -- Pass the 'asc' parameter to the merge function
+          putStrLn $ "Iteration " ++ show iter ++ ": " ++ show merged
+          return merged
 
-validateArrayRange :: [Int] -> Bool
-validateArrayRange [] = False
-validateArrayRange array = all (\x -> x >= 0 && x <= 100) array
-
-simulateSort :: ([Int] -> [Int]) -> IO ()
-simulateSort sortFunction = do
-  orderChoice <- getOrderChoice
-  let array = getDefaultArray
-  let sortedArray = if orderChoice == 1 then sortFunction array else reverse (sortFunction array)
-
-  setColor Magenta
-  putStrLn $ "\nDefault Array: " ++ show array
-  putStrLn $ "Sorting in " ++ (if orderChoice == 1 then "Ascending" else "Descending") ++ " order..."
-  putStrLn $ "Sorted Array: " ++ show sortedArray
-  resetColor
-
-  putStrLn "Do you want to input a custom array? (y/n)"
-  customArrayOption <- getLine
-
-  case customArrayOption of
-    "y" -> do
-      customArray <- getCustomArray
-      let customSortedArray = if orderChoice == 1 then sortFunction customArray else reverse (sortFunction customArray)
-
-      if validateArrayRange customArray
-        then do
-          setColor Magenta
-          putStrLn $ "\nCustom Array: " ++ show customArray
-          putStrLn $ "Sorting in " ++ (if orderChoice == 1 then "Ascending" else "Descending") ++ " order..."
-          putStrLn $ "Sorted Custom Array: " ++ show customSortedArray
-          resetColor
-        else do
-          setColor Red
-          putStrLn "Invalid input. Please provide a valid array in the specified range: arrays of size 5 within the range of 0 to 100."
-          resetColor
-
-    _ -> return ()
-
-  putStrLn "Do you want to try another sorting algorithm? (y/n)"
-  restartOption <- getLine
-
-  if restartOption == "y"
-    then main
-    else do
-      setColor Green
-      putStrLn "Exiting program, Goodbye!"
-      resetColor
 
 main :: IO ()
 main = do
-  setColor Green
-  displayMenu
-  resetColor
-  algorithmChoice <- getAlgorithmChoice
 
-  case algorithmChoice of
-    1 -> simulateSort (selectionSort :: [Int] -> [Int])
-    2 -> simulateSort (bubbleSort :: [Int] -> [Int])
-    3 -> simulateSort (insertionSort :: [Int] -> [Int])
-    4 -> simulateSort (mergeSort :: [Int] -> [Int])
-    5 -> simulateSort (quickSort :: [Int] -> [Int])
-    _ -> do
-      setColor Red
-      putStrLn "Invalid input. Please enter a number between 1 and 5."
-      resetColor
+    putStrLn "Choose an algorithm:"
+    putStrLn "[1] Selection Sort"
+    putStrLn "[2] Bubble Sort"
+    putStrLn "[3] Insertion Sort"
+    putStrLn "[4] Merge Sort"
+    putStrLn "[5] Quick Sort"
+    putStr "Enter your choice: "
+    
+    choice <- getLine
+    let sortAlgorithm = case choice of
+                            "1" -> bubbleSort
+                            "2" -> insertionSort
+                            "3" -> selectionSort
+                            "4" -> quickSort
+                            "5" -> (\arr asc -> mergeSort arr asc >>= \sortedArr -> putStrLn $ "Sorted Array: " ++ intercalate ", " (map show sortedArr))
+                            _ -> bubbleSort
+    
+    putStrLn "Enter sorting order (1 for Ascending, 0 for Descending):"
+    sortOrder <- getLine
+    let asc = sortOrder == "1"
+    
+    arr <- readIntList
+    
+    sortAlgorithm arr asc
+    
+    putStrLn "Do you want to continue? (Type 'no' to exit or any other key to continue)"
+    continue <- getLine
+    if continue /= "no"
+        then main
+        else putStrLn "Closing the program..."
+
+-- Function to read a list of integers from user input
+readIntList :: IO [Int]
+readIntList = do
+    putStrLn "Enter a list of integers separated by spaces:"
+    input <- getLine
+    let parsed = map read $ words input :: [Int]
+    return parsed
